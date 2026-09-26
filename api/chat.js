@@ -16,30 +16,34 @@ export default async function handler(request) {
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return Response.json(
-        { error: "OPENAI_API_KEY is not configured" },
+        { error: "GEMINI_API_KEY is not configured" },
         { status: 500 }
       );
     }
 
     const response = await fetch(
-      "https://api.openai.com/v1/responses",
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          "x-goog-api-key": apiKey,
         },
         body: JSON.stringify({
-          model: "gpt-5-mini",
-          instructions:
-            `You are Homework Buddy, a friendly ${grade} study helper. ` +
-            "Explain things clearly and simply. Help the student understand " +
-            "their work instead of giving unexplained answers.",
-          input: message,
+          systemInstruction: {
+            parts: [{
+              text:
+                `You are Homework Buddy, a friendly ${grade} study helper. ` +
+                "Explain things clearly and simply. Help the student understand their work."
+            }]
+          },
+          contents: [{
+            parts: [{ text: message }]
+          }]
         }),
       }
     );
@@ -48,15 +52,18 @@ export default async function handler(request) {
 
     if (!response.ok) {
       return Response.json(
-        { error: "OpenAI request failed" },
+        { error: "Gemini request failed", details: data },
         { status: 500 }
       );
     }
 
-    return Response.json({
-      reply: data.output_text || "I couldn't generate a response.",
-    });
-  } catch {
+    const reply =
+      data.candidates?.[0]?.content?.parts?.[0]?.text ||
+      "I couldn't generate a response.";
+
+    return Response.json({ reply });
+
+  } catch (error) {
     return Response.json(
       { error: "Something went wrong" },
       { status: 500 }
