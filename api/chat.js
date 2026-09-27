@@ -1,72 +1,63 @@
-export default async function handler(request) {
-  if (request.method !== "POST") {
-    return Response.json(
-      { error: "Method not allowed" },
-      { status: 405 }
-    );
+export default async function handler(req, res) {
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { message, grade = "Grade 10" } = await request.json();
+    const { message, grade = "Grade 10" } = req.body || {};
 
     if (!message) {
-      return Response.json(
-        { error: "Message is required" },
-        { status: 400 }
-      );
+      return res.status(400).json({ error: "Message is required" });
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return Response.json(
-        { error: "GEMINI_API_KEY is not configured" },
-        { status: 500 }
-      );
+      return res.status(500).json({
+        error: "GEMINI_API_KEY is not configured"
+      });
     }
 
-    const response = await fetch(
+    const geminiResponse = await fetch(
       "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-goog-api-key": apiKey,
+          "x-goog-api-key": apiKey
         },
         body: JSON.stringify({
           systemInstruction: {
             parts: [{
-              text:
-                `You are Homework Buddy, a friendly ${grade} study helper. ` +
-                "Explain things clearly and simply. Help the student understand their work."
+              text: `You are Homework Buddy, a friendly ${grade} study helper. Explain things clearly and simply. Help the student understand their work.`
             }]
           },
           contents: [{
             parts: [{ text: message }]
           }]
-        }),
+        })
       }
     );
 
-    const data = await response.json();
+    const data = await geminiResponse.json();
 
-    if (!response.ok) {
-      return Response.json(
-        { error: "Gemini request failed", details: data },
-        { status: 500 }
-      );
+    if (!geminiResponse.ok) {
+      return res.status(500).json({
+        error: "Gemini request failed",
+        details: data
+      });
     }
 
     const reply =
       data.candidates?.[0]?.content?.parts?.[0]?.text ||
       "I couldn't generate a response.";
 
-    return Response.json({ reply });
+    return res.status(200).json({ reply });
 
   } catch (error) {
-    return Response.json(
-      { error: "Something went wrong" },
-      { status: 500 }
-    );
+    console.error("Chat API error:", error);
+    return res.status(500).json({
+      error: "Something went wrong"
+    });
   }
 }
