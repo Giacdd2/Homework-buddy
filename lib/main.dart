@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 
 void main() {
   runApp(const HomeworkBuddyApp());
@@ -39,30 +41,62 @@ class _ChatPageState extends State<ChatPage> {
     },
   ];
 
-  void sendMessage() {
+  bool isLoading = false;
+
+  Future<void> sendMessage() async {
     final text = controller.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || isLoading) return;
 
     setState(() {
       messages.add({
         'sender': 'user',
         'text': text,
       });
+      isLoading = true;
     });
 
     controller.clear();
 
-    // Temporary response until we connect the AI.
-    Future.delayed(const Duration(milliseconds: 500), () {
+    try {
+      final response = await http.post(
+        Uri.parse('https://homework-buddy-seven.vercel.app/api/chat'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'message': text,
+          'grade': 'Grade 10',
+        }),
+      );
+
+      final data = jsonDecode(response.body);
+
       if (!mounted) return;
 
       setState(() {
         messages.add({
           'sender': 'buddy',
-          'text': 'Got it! I’ll help you with that. 🤓'
+          'text': response.statusCode == 200
+              ? (data['reply'] ?? 'I could not generate a response.')
+              : 'Sorry, something went wrong with the AI connection.',
         });
       });
-    });
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        messages.add({
+          'sender': 'buddy',
+          'text': 'I couldn’t connect to the AI right now. Please try again.',
+        });
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -78,12 +112,6 @@ class _ChatPageState extends State<ChatPage> {
             Text('Homework Buddy'),
           ],
         ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_rounded),
-            onPressed: () {},
-          ),
-        ],
       ),
       body: Column(
         children: [
@@ -105,7 +133,9 @@ class _ChatPageState extends State<ChatPage> {
                     decoration: BoxDecoration(
                       color: isUser
                           ? Theme.of(context).colorScheme.primary
-                          : Theme.of(context).colorScheme.surfaceContainerHighest,
+                          : Theme.of(context)
+                              .colorScheme
+                              .surfaceContainerHighest,
                       borderRadius: BorderRadius.circular(18),
                     ),
                     child: Text(
@@ -117,7 +147,11 @@ class _ChatPageState extends State<ChatPage> {
               },
             ),
           ),
-
+          if (isLoading)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Homework Buddy is thinking...'),
+            ),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
